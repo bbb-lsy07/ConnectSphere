@@ -48,7 +48,7 @@
     h2 { color: var(--primary-color); font-size: 18px; font-weight: 600; margin-bottom: 15px; }
     
     button {
-      display: inline-block; width: 100%; padding: 12px; background: var(--primary-color);
+      display: inline-block; padding: 12px; background: var(--primary-color);
       border: none; border-radius: 8px; color: #fff; font-size: 16px; font-weight: 600;
       cursor: pointer; transition: all 0.2s;
     }
@@ -58,6 +58,7 @@
     .btn-warning { background: var(--warning-color); }
     .btn-paused { background: var(--paused-color); }
     .btn-small { padding: 6px 12px; font-size: 14px; width: auto; margin-left: 10px; }
+    .btn-block { width: 100%; }
     .flex-row { display: flex; gap: 10px; }
 
     input[type="text"] {
@@ -94,7 +95,7 @@
 
     .file-info-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 15px; margin: 15px 0; font-size: 15px; }
     .info-label { color: var(--text-muted); }
-    .info-value { color: var(--text-main); font-weight: 500; text-align: right; }
+    .info-value { color: var(--text-main); font-weight: 500; text-align: right; word-break: break-all; }
     
     .progress-bar { height: 8px; background: var(--background-light); border-radius: 4px; overflow: hidden; margin: 20px 0; }
     .progress-fill { height: 100%; background: var(--primary-color); transition: width 0.3s ease; }
@@ -113,8 +114,8 @@
 
     .modal-overlay { background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
     .modal-overlay.show { opacity: 1; pointer-events: auto; }
-    .modal-content { background: var(--card-bg); padding: 30px; border-radius: 16px; text-align: center; }
-    #qrcode { margin: 15px 0; padding: 10px; background: white; border-radius: 8px; }
+    .modal-content { background: var(--card-bg); padding: 30px; border-radius: 16px; text-align: center; max-width: 90vw; }
+    #qrcode { margin: 15px 0; padding: 10px; background: white; border-radius: 8px; max-width: 100%; }
     .hidden { display: none !important; }
     
     .retry-section { margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color); }
@@ -132,20 +133,50 @@
     .status-disconnected { background-color: var(--error-color); }
     
     /* 文件完整性验证 */
-    .file-hash-section { 
-      margin-top: 15px; 
-      padding: 10px; 
-      background: rgba(255,255,255,0.05); 
-      border-radius: 8px; 
-      font-size: 13px;
-      display: none;
+    .file-verification {
+      margin-top: 15px;
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      border-left: 3px solid var(--primary-color);
     }
-    .file-hash-section.visible { 
-      display: block;
+    
+    .verification-result {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 6px;
+      font-weight: 500;
+      text-align: center;
+      word-break: break-word;
     }
-    .file-hash-section span {
+    .verification-success {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--primary-color);
+    }
+    .verification-failure {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--error-color);
+    }
+    
+    /* 按钮组 */
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .button-group button {
+      flex: 1;
+    }
+    
+    /* 文件哈希验证区域 */
+    .hash-display {
       font-family: monospace;
+      font-size: 13px;
       word-break: break-all;
+      background: rgba(0,0,0,0.2);
+      padding: 8px;
+      border-radius: 6px;
+      margin-top: 5px;
     }
     
     /* 超时提示 */
@@ -162,6 +193,7 @@
       position: relative;
       display: inline-block;
       cursor: help;
+      border-bottom: 1px dotted var(--text-muted);
     }
     .tooltip .tooltip-text {
       visibility: hidden;
@@ -170,7 +202,7 @@
       color: var(--text-main);
       text-align: center;
       border-radius: 6px;
-      padding: 5px;
+      padding: 8px;
       position: absolute;
       z-index: 1;
       bottom: 125%;
@@ -178,12 +210,48 @@
       transform: translateX(-50%);
       opacity: 0;
       transition: opacity 0.3s;
-      font-size: 12px;
+      font-size: 13px;
       border: 1px solid var(--border-color);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     }
     .tooltip:hover .tooltip-text {
       visibility: visible;
       opacity: 1;
+    }
+    
+    /* 文件信息 */
+    .file-info-container {
+      margin-top: 15px;
+      padding: 15px;
+      background: rgba(0,0,0,0.1);
+      border-radius: 8px;
+    }
+    
+    /* 传输状态 */
+    .transfer-status {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    
+    /* 响应式调整 */
+    @media (max-width: 480px) {
+      .container {
+        padding: 20px 15px;
+      }
+      .logo-text {
+        font-size: 28px;
+      }
+      .button-group {
+        flex-direction: column;
+      }
+      .share-link-wrapper {
+        flex-wrap: wrap;
+      }
+      .share-link-wrapper button {
+        margin-top: 5px;
+      }
     }
   </style>
 </head>
@@ -191,7 +259,9 @@
   <div class="notification-container" id="notificationArea"></div>
   <div class="modal-overlay" id="qrModal" onclick="this.classList.remove('show')">
     <div class="modal-content" onclick="event.stopPropagation();">
-      <h2>用手机扫描二维码</h2><div id="qrcode"></div>
+      <h2>用手机扫描二维码</h2>
+      <div id="qrcode"></div>
+      <button class="btn-block" style="margin-top:15px;" onclick="getEl('qrModal').classList.remove('show')">关闭</button>
     </div>
   </div>
 
@@ -212,8 +282,21 @@
             </div>
             <input type="file" id="fileInput">
             <div id="fileInfoDisplay" class="hidden">
-                <p>已选: <strong id="selectedFileName"></strong></p>
-                <button onclick="generateShareLink()" style="margin-top:15px;">生成分享链接</button>
+                <div class="file-info-container">
+                  <div class="file-info-grid">
+                    <span class="info-label">文件名:</span>
+                    <span id="selectedFileName" class="info-value"></span>
+                  </div>
+                  
+                  <div class="file-verification">
+                    <div class="info-label">文件哈希验证 <span class="tooltip">?
+                      <span class="tooltip-text">用于验证文件完整性的SHA-256哈希值</span>
+                    </span></div>
+                    <div id="fileHashDisplay" class="hash-display"></div>
+                    <div id="verificationResult" class="verification-result">等待验证...</div>
+                  </div>
+                </div>
+                <button class="btn-block" onclick="generateShareLink()" style="margin-top:15px;">生成分享链接</button>
             </div>
         </div>
         <div class="section hidden" id="shareStep2">
@@ -231,7 +314,7 @@
             </div>
             
             <div class="retry-section">
-                <button class="btn-warning" onclick="resetShareProcess()">重新选择文件</button>
+                <button class="btn-warning btn-block" onclick="resetShareProcess()">重新选择文件</button>
             </div>
         </div>
     </div>
@@ -241,44 +324,57 @@
         <div class="section" id="receiveStep1">
             <h2>1. 粘贴链接</h2>
             <input type="text" id="shareUrlInput" placeholder="在此处粘贴分享链接">
-            <button id="connectButton" onclick="connectToPeer()">连接分享者</button>
+            <button id="connectButton" class="btn-block" onclick="connectToPeer()">连接分享者</button>
         </div>
         <div class="section hidden" id="receiveStep2">
             <h2>2. 接收文件 <span id="connectionStatus" class="status-indicator status-connecting"></span></h2>
-            <div class="file-info-grid">
-              <span class="info-label">文件名:</span> <span id="fileName" class="info-value">-</span>
-              <span class="info-label">文件大小:</span> <span id="fileSize" class="info-value">-</span>
-            </div>
-            <div class="progress-bar"><div id="downloadProgress" class="progress-fill"></div></div>
-            <div class="file-info-grid" style="font-size: 14px;">
-              <span class="info-label">进度:</span> <span id="progressText" class="info-value">0%</span>
-              <span class="info-label">速度:</span> <span id="speedText" class="info-value">0 KB/s</span>
-            </div>
-            <div class="flex-row">
-                <button id="downloadButton" onclick="startDownload()" disabled>开始下载</button>
-                <button class="btn-secondary" id="pauseButton" onclick="pauseDownload()" disabled>暂停</button>
-            </div>
-            <div id="downloadStatus" class="status"></div>
-            
-            <div class="file-hash-section" id="hashSection">
-              <div class="info-label">
-                文件校验:
-                <span class="tooltip">?
-                  <span class="tooltip-text">用于验证文件完整性的SHA-256哈希值，下载完成后会自动验证</span>
-                </span>
+            <div class="file-info-container">
+              <div class="file-info-grid">
+                <span class="info-label">文件名:</span> <span id="fileName" class="info-value">-</span>
+                <span class="info-label">文件大小:</span> <span id="fileSize" class="info-value">-</span>
               </div>
-              <div><span id="fileHash"></span></div>
+              
+              <div class="progress-bar"><div id="downloadProgress" class="progress-fill"></div></div>
+              
+              <div class="transfer-status">
+                <div>
+                  <span class="info-label">进度:</span> 
+                  <span id="progressText" class="info-value">0%</span>
+                </div>
+                <div>
+                  <span class="info-label">速度:</span> 
+                  <span id="speedText" class="info-value">0 KB/s</span>
+                </div>
+              </div>
+              
+              <div class="button-group">
+                  <button id="downloadButton" onclick="startDownload()" disabled>开始下载</button>
+                  <button id="pauseButton" class="btn-secondary" onclick="togglePauseDownload()" disabled>暂停</button>
+              </div>
+              
+              <div id="downloadStatus" class="status"></div>
+              
+              <div class="file-verification">
+                <div class="info-label">
+                  文件校验:
+                  <span class="tooltip">?
+                    <span class="tooltip-text">用于验证文件完整性的SHA-256哈希值，下载完成后会自动验证</span>
+                  </span>
+                </div>
+                <div id="fileHash" class="hash-display">等待文件信息...</div>
+                <div id="receiverVerificationResult" class="verification-result">等待下载完成...</div>
+              </div>
             </div>
             
             <div id="timeoutWarning" class="timeout-warning hidden">
-              传输已暂停，长时间无进度。请尝试<span class="tooltip">恢复下载
+              <b>传输已暂停</b><br>
+              长时间无进度，请尝试<span class="tooltip">恢复下载
                 <span class="tooltip-text">如果恢复失败，请尝试重新连接</span>
-              </span>
+              </span>或重新连接
             </div>
             
             <div class="retry-section">
-                <button class="btn-warning" id="resumeButton" onclick="resumeDownload()" disabled>恢复下载</button>
-                <button class="btn-secondary" onclick="resetReceiveProcess()">重新连接</button>
+                <button class="btn-secondary btn-block" onclick="resetReceiveProcess()">重新连接</button>
             </div>
         </div>
     </div>
@@ -302,6 +398,8 @@
     let resumeOffset = 0;
     let lastDataReceivedTime = 0;
     let inactivityTimer;
+    let originalFileHash = '';
+    let currentTransfer = null;
 
     const PEERJS_SERVERS = [
       { host: 'broker.webrtc.ecl.ntt.com', port: 443, path: '/', secure: true },
@@ -318,8 +416,8 @@
     };
 
     // 简单的哈希函数用于文件验证
-    async function simpleHash(data) {
-      const buffer = await data.arrayBuffer();
+    async function calculateFileHash(file) {
+      const buffer = await file.arrayBuffer();
       const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
       return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -327,7 +425,6 @@
 
     window.onload = () => {
         setupDragDrop();
-        getEl('qrModal').addEventListener('click', () => getEl('qrModal').classList.remove('show'));
         setupModeFromURL();
         initPeer();
     };
@@ -432,15 +529,47 @@
         
         // 计算文件哈希值用于完整性验证
         try {
-          fileHash = await simpleHash(file);
+          getEl('verificationResult').textContent = '正在计算文件哈希...';
+          getEl('verificationResult').className = 'verification-result';
+          fileHash = await calculateFileHash(file);
+          originalFileHash = fileHash; // 保存原始哈希值
+          getEl('fileHashDisplay').textContent = fileHash;
+          getEl('verificationResult').textContent = '哈希计算完成';
+          getEl('verificationResult').className = 'verification-result verification-success';
         } catch (error) {
           console.error('计算文件哈希失败:', error);
-          fileHash = '';
+          fileHash = '无法计算哈希值';
+          getEl('fileHashDisplay').textContent = fileHash;
+          getEl('verificationResult').textContent = '哈希计算失败';
+          getEl('verificationResult').className = 'verification-result verification-failure';
         }
     }
 
-    function generateShareLink() {
+    async function generateShareLink() {
         if (!peerIdReady) return showNotification('error', '网络未就绪，请稍等');
+        
+        // 重新计算文件哈希以验证文件是否被修改
+        try {
+          getEl('verificationResult').textContent = '正在验证文件...';
+          getEl('verificationResult').className = 'verification-result';
+          const newHash = await calculateFileHash(file);
+          if (newHash !== originalFileHash) {
+            getEl('verificationResult').textContent = '文件已被修改，请重新选择';
+            getEl('verificationResult').className = 'verification-result verification-failure';
+            showNotification('error', '文件已被修改，请重新选择');
+            return;
+          } else {
+            getEl('verificationResult').textContent = '文件验证通过';
+            getEl('verificationResult').className = 'verification-result verification-success';
+          }
+        } catch (error) {
+          console.error('文件验证失败:', error);
+          getEl('verificationResult').textContent = '文件验证失败';
+          getEl('verificationResult').className = 'verification-result verification-failure';
+          showNotification('error', '文件验证失败');
+          return;
+        }
+        
         const shareLink = `${window.location.origin}${window.location.pathname}?peerId=${peer.id}`;
         getEl('shareLink').innerHTML = `<a href="${shareLink}" target="_blank">${shareLink}</a>`;
         getEl('shareStep2').classList.remove('hidden');
@@ -458,7 +587,11 @@
         const link = getEl('shareLink').querySelector('a').href;
         const qrContainer = getEl('qrcode');
         qrContainer.innerHTML = '';
-        new QRCode(qrContainer, { text: link, width: 256, height: 256 });
+        new QRCode(qrContainer, { 
+          text: link, 
+          width: Math.min(256, window.innerWidth - 100),
+          height: Math.min(256, window.innerWidth - 100)
+        });
         getEl('qrModal').classList.add('show');
     }
 
@@ -515,6 +648,12 @@
         const state = connections.get(peerId);
         if (!state) return;
 
+        // 清除之前的传输
+        if (currentTransfer) {
+          clearInterval(currentTransfer.checkCompletion);
+          currentTransfer = null;
+        }
+
         const CHUNK_SIZE = 256 * 1024;
         const reader = new FileReader();
         let offset = startOffset, lastUpdate = Date.now(), lastLoaded = offset;
@@ -562,8 +701,10 @@
                       clearInterval(checkCompletion);
                       conn.send({ type: 'file-complete', payload: { hash: fileHash } });
                       updatePeerUI(peerId, { progress: 100, statusText: '完成', badgeText: '已完成', badgeClass: 'status-completed' });
+                      currentTransfer = null;
                     }
                   }, 100);
+                  currentTransfer = { checkCompletion };
                 }
             } catch (err) { 
               console.error('发送文件错误:', err);
@@ -627,10 +768,11 @@
             updateStatus('连接成功，等待文件信息...', false);
             getEl('receiveStep2').classList.remove('hidden');
             getEl('receiveStep1').classList.add('hidden');
-            getEl('hashSection').classList.add('hidden');
+            getEl('receiverVerificationResult').className = 'verification-result';
+            getEl('receiverVerificationResult').textContent = '等待下载完成...';
             getEl('timeoutWarning').classList.add('hidden');
             getEl('pauseButton').disabled = false;
-            getEl('resumeButton').disabled = true;
+            getEl('pauseButton').textContent = '暂停';
             
             // 连接成功后立即发送文件请求
             activeConn.send({ type: 'request-file' });
@@ -645,8 +787,7 @@
             getEl('downloadButton').disabled = true; 
             getEl('connectionStatus').className = 'status-indicator status-disconnected';
             if (isDownloading && !fileCompleted) {
-              showNotification('warning', '连接中断，点击"恢复下载"继续');
-              getEl('resumeButton').disabled = false;
+              showNotification('warning', '连接中断，请尝试重新连接');
             }
         });
         activeConn.on('error', err => { 
@@ -664,13 +805,12 @@
               receivedBytes = 0;
               receivedChunks = [];
               getEl('fileName').textContent = data.payload.name;
-              getEl('fileSize').textContent = (totalBytes / 1024 / 1024).toFixed(2) + ' MB';
+              getEl('fileSize').textContent = formatFileSize(totalBytes);
               getEl('downloadButton').disabled = false;
               getEl('downloadStatus').textContent = '文件信息已就绪，点击开始下载';
               
               // 显示文件哈希值用于验证
               if (data.payload.hash) {
-                getEl('hashSection').classList.add('visible');
                 getEl('fileHash').textContent = data.payload.hash;
               }
               
@@ -721,9 +861,9 @@
                           verifyFileIntegrity();
                       } else if (waitCount >= maxWait) {
                           clearInterval(waitInterval);
-                          showNotification('error', '文件接收超时，请尝试恢复下载');
+                          showNotification('error', '文件接收超时，请尝试重新连接');
                           getEl('downloadStatus').textContent = '接收超时';
-                          pauseDownload();
+                          togglePauseDownload();
                       }
                       waitCount++;
                   }, 100);
@@ -738,6 +878,14 @@
         }
     }
     
+    // 格式化文件大小
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+      if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+      return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+    
     // 超时检测机制
     function resetInactivityTimer() {
       clearTimeout(inactivityTimer);
@@ -749,7 +897,7 @@
           showNotification('warning', '传输无进展，已自动暂停');
           getEl('downloadStatus').textContent = '传输无进展，已自动暂停';
           getEl('timeoutWarning').classList.remove('hidden');
-          pauseDownload();
+          togglePauseDownload();
         }
       }, 15000);
     }
@@ -761,9 +909,11 @@
         
         // 验证文件大小
         if (blob.size !== totalBytes) {
-          showNotification('error', `文件大小不匹配: ${blob.size} / ${totalBytes}`);
+          showNotification('error', `文件大小不匹配: ${formatFileSize(blob.size)} / ${formatFileSize(totalBytes)}`);
           getEl('downloadStatus').textContent = '文件大小不匹配，请重试';
-          pauseDownload();
+          getEl('receiverVerificationResult').textContent = '文件大小不匹配';
+          getEl('receiverVerificationResult').className = 'verification-result verification-failure';
+          togglePauseDownload();
           return;
         }
         
@@ -771,12 +921,16 @@
         const expectedHash = getEl('fileHash').textContent;
         if (expectedHash) {
           getEl('downloadStatus').textContent = '正在验证文件完整性...';
-          const receivedHash = await simpleHash(blob);
+          getEl('receiverVerificationResult').textContent = '正在验证文件...';
+          getEl('receiverVerificationResult').className = 'verification-result';
+          const receivedHash = await calculateFileHash(blob);
           
           if (receivedHash !== expectedHash) {
             showNotification('error', '文件校验失败，内容可能已损坏');
             getEl('downloadStatus').textContent = '文件校验失败';
-            pauseDownload();
+            getEl('receiverVerificationResult').textContent = '文件校验失败';
+            getEl('receiverVerificationResult').className = 'verification-result verification-failure';
+            togglePauseDownload();
             return;
           }
         }
@@ -787,6 +941,8 @@
         console.error('文件验证错误:', err);
         showNotification('error', '文件验证失败');
         getEl('downloadStatus').textContent = '文件验证失败';
+        getEl('receiverVerificationResult').textContent = '文件验证失败';
+        getEl('receiverVerificationResult').className = 'verification-result verification-failure';
       }
     }
     
@@ -804,9 +960,11 @@
         getEl('progressText').textContent = '0%';
         getEl('speedText').textContent = '0 KB/s';
         getEl('downloadStatus').textContent = '开始下载...';
+        getEl('receiverVerificationResult').textContent = '下载中...';
+        getEl('receiverVerificationResult').className = 'verification-result';
         paused = false;
         getEl('pauseButton').disabled = false;
-        getEl('resumeButton').disabled = true;
+        getEl('pauseButton').textContent = '暂停';
 
         isDownloading = true;
         let lastLoaded = 0;
@@ -830,39 +988,35 @@
         }, 1000);
     }
     
-    function pauseDownload() {
+    function togglePauseDownload() {
       if (!isDownloading) return;
-      paused = true;
-      getEl('downloadStatus').textContent = '下载已暂停';
-      getEl('pauseButton').disabled = true;
-      getEl('resumeButton').disabled = false;
-      showNotification('warning', '下载已暂停');
       
-      // 通知分享端暂停传输
-      if (activeConn && activeConn.open) {
-        activeConn.send({ type: 'pause-download' });
+      if (paused) {
+        // 恢复下载
+        paused = false;
+        getEl('pauseButton').textContent = '暂停';
+        getEl('downloadStatus').textContent = '恢复下载...';
+        getEl('timeoutWarning').classList.add('hidden');
+        
+        // 重置超时检测
+        resetInactivityTimer();
+        
+        // 请求从当前接收位置继续下载
+        if (activeConn && activeConn.open) {
+          activeConn.send({ type: 'resume-download', payload: { offset: receivedBytes } });
+        }
+      } else {
+        // 暂停下载
+        paused = true;
+        getEl('pauseButton').textContent = '恢复';
+        getEl('downloadStatus').textContent = '下载已暂停';
+        showNotification('warning', '下载已暂停');
+        
+        // 通知分享端暂停传输
+        if (activeConn && activeConn.open) {
+          activeConn.send({ type: 'pause-download' });
+        }
       }
-    }
-    
-    function resumeDownload() {
-      if (!activeConn || activeConn.open !== true) {
-        showNotification('error', '连接已断开，请重新连接');
-        return;
-      }
-      
-      if (!paused) return;
-      
-      paused = false;
-      getEl('downloadStatus').textContent = '恢复下载...';
-      getEl('pauseButton').disabled = false;
-      getEl('resumeButton').disabled = true;
-      getEl('timeoutWarning').classList.add('hidden');
-      
-      // 重置超时检测
-      resetInactivityTimer();
-      
-      // 请求从当前接收位置继续下载
-      activeConn.send({ type: 'resume-download', payload: { offset: receivedBytes } });
     }
     
     function assembleAndDownloadFile(blob) {
@@ -885,10 +1039,14 @@
             btn.disabled = true;
             getEl('speedText').textContent = "0 KB/s";
             getEl('pauseButton').disabled = true;
+            getEl('receiverVerificationResult').textContent = '文件验证通过';
+            getEl('receiverVerificationResult').className = 'verification-result verification-success';
         } catch (err) {
             console.error('组装文件错误:', err);
             showNotification('error', '文件组装失败');
             getEl('downloadStatus').textContent = '文件组装失败';
+            getEl('receiverVerificationResult').textContent = '文件组装失败';
+            getEl('receiverVerificationResult').className = 'verification-result verification-failure';
         }
     }
 
