@@ -130,9 +130,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
   [PeerJS](https://peerjs.com/) for simplifying WebRTC.
 - [QRCode.js](https://davidshimjs.github.io/qrcodejs/)，用于生成二维码。  
   [QRCode.js](https://davidshimjs.github.io/qrcodejs/) for QR code generation.
-- 由 xAI 创建的 Grok 提供辅助。  
-  Built with assistance from Grok, created by xAI.
-
----
-
-*最后更新 / Last updated: 2025年6月21日 / June 21, 2025*
