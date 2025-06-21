@@ -45,7 +45,7 @@
 1. 克隆仓库：  
    Clone the repository:
    ```bash
-   git clone https://github.com/your-username/connectsphere.git
+   git clone https://github.com/bbb-lsy07/connectsphere.git
    ```
 2. 在浏览器中打开 `index.html`，或通过本地服务器（如 VS Code 的 Live Server）托管。  
    Open `index.html` in a web browser, or host it on a local server (e.g., using `Live Server` in VS Code).
