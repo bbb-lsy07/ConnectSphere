@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>灵犀传 - 点对点文件传输</title>
+  <script data-cfasync="false" src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+  <script data-cfasync="false" src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root {
+      --primary-color: #10b981; --secondary-color: #3b82f6; --background-dark: #0f1f2f;
+      --background-light: #1a2b40; --card-bg: rgba(30, 38, 46, 0.9); --text-main: #e0e0e0;
+      --text-muted: #9ca3af; --border-color: rgba(16, 185, 129, 0.2); --error-color: #ef4444;
+      --completed-color: #8b5cf6;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
+    body {
+      background: linear-gradient(135deg, var(--background-dark), var(--background-light));
+      color: var(--text-main); display: flex; justify-content: center; align-items: center;
+      min-height: 100vh; padding: 20px;
+    }
+    .container {
+      background: var(--card-bg); padding: 30px; border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); width: 100%; max-width: 500px;
+      border: 1px solid var(--border-color); backdrop-filter: blur(10px);
+    }
+    .logo { text-align: center; margin-bottom: 20px; }
+    .logo-text {
+      font-size: 36px; font-weight: 700;
+      background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .mode-toggle {
+      display: flex; justify-content: center; margin-bottom: 25px;
+      background: var(--background-light); border-radius: 10px; padding: 5px;
+    }
+    .mode-toggle button {
+      flex: 1; padding: 10px; border: none; background: transparent; color: var(--text-muted);
+      font-size: 16px; font-weight: 600; cursor: pointer; border-radius: 8px; transition: all 0.3s;
+    }
+    .mode-toggle button.active { background: var(--primary-color); color: #fff; }
+    
+    .page { display: none; }
+    .page.active { display: block; animation: fadeIn 0.5s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .section { margin-bottom: 20px; }
+    h2 { color: var(--primary-color); font-size: 18px; font-weight: 600; margin-bottom: 15px; }
+    
+    button {
+      display: inline-block; width: 100%; padding: 12px; background: var(--primary-color);
+      border: none; border-radius: 8px; color: #fff; font-size: 16px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:disabled { background: #4b5563; cursor: not-allowed; }
+    .btn-secondary { background: var(--secondary-color); }
+    .btn-small { padding: 6px 12px; font-size: 14px; width: auto; margin-left: 10px; }
+    .flex-row { display: flex; gap: 10px; }
+
+    input[type="text"] {
+      width:100%; padding:12px; border-radius:8px; border:1px solid var(--border-color); 
+      background: var(--background-light); color:var(--text-main); font-size:16px; margin-bottom: 15px;
+    }
+
+    #fileDropZone {
+      border: 2px dashed var(--border-color); border-radius: 12px; padding: 30px 20px;
+      text-align: center; color: var(--text-muted); margin-bottom: 15px; transition: all 0.3s;
+    }
+    #fileDropZone.dragover { background-color: rgba(16, 185, 129, 0.1); border-color: var(--primary-color); }
+    #fileInput { display: none; }
+
+    .share-link-wrapper { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+    #shareLink { background: var(--background-light); padding: 10px 15px; border-radius: 8px; font-size: 14px; word-break: break-all; flex-grow: 1; }
+    #shareLink a { color: var(--secondary-color); text-decoration: none; }
+
+    #peerList { background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; }
+    .peer-list-item { display: grid; grid-template-columns: 1fr auto; align-items: center; padding: 12px; border-bottom: 1px solid var(--border-color); }
+    .peer-list-item:last-child { border-bottom: none; }
+    .peer-info { font-size: 14px; }
+    .peer-id { font-weight: bold; }
+    .peer-status-text { font-size: 12px; color: var(--text-muted); }
+    .status-badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; color: #fff; }
+    .status-connected { background-color: var(--secondary-color); }
+    .status-sending { background-color: var(--primary-color); }
+    .status-completed { background-color: var(--completed-color); }
+    .status-error { background-color: var(--error-color); }
+    .peer-progress { width: 100%; height: 5px; background: var(--background-light); border-radius: 3px; margin-top: 5px; }
+    .peer-progress-fill { height: 100%; background: var(--primary-color); border-radius: 3px; transition: width 0.3s; }
+
+    .file-info-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 15px; margin: 15px 0; font-size: 15px; }
+    .info-label { color: var(--text-muted); }
+    .info-value { color: var(--text-main); font-weight: 500; text-align: right; }
+    
+    .progress-bar { height: 8px; background: var(--background-light); border-radius: 4px; overflow: hidden; margin: 20px 0; }
+    .progress-fill { height: 100%; background: var(--primary-color); transition: width 0.3s ease; }
+
+    .status { font-size: 14px; color: var(--text-muted); text-align: center; margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .spinner { border: 3px solid rgba(255, 255, 255, 0.2); border-top-color: var(--text-main); border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .notification-container, .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .notification-container { align-items: flex-start; padding-top: 20px; pointer-events: none; }
+    .notification { padding: 12px 20px; border-radius: 8px; font-weight: 500; color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.4); opacity: 0; transform: translateY(-20px); transition: all 0.3s; }
+    .notification.show { opacity: 1; transform: translateY(0); }
+    .notification-success { background: var(--primary-color); }
+    .notification-error { background: var(--error-color); }
+
+    .modal-overlay { background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+    .modal-overlay.show { opacity: 1; pointer-events: auto; }
+    .modal-content { background: var(--card-bg); padding: 30px; border-radius: 16px; text-align: center; }
+    #qrcode { margin: 15px 0; padding: 10px; background: white; border-radius: 8px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="notification-container" id="notificationArea"></div>
+  <div class="modal-overlay" id="qrModal" onclick="this.classList.remove('show')">
+    <div class="modal-content" onclick="event.stopPropagation();">
+      <h2>用手机扫描二维码</h2><div id="qrcode"></div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="logo"><div class="logo-text">灵犀传</div></div>
+    
+    <div class="mode-toggle">
+      <button id="shareModeBtn" onclick="switchMode('share')">我要分享</button>
+      <button id="receiveModeBtn" onclick="switchMode('receive')">我要接收</button>
+    </div>
+
+    <!-- Share Page -->
+    <div id="sharePage" class="page">
+        <div class="section" id="shareStep1">
+            <h2>1. 选择文件</h2>
+            <div id="fileDropZone" class="file-drop-zone">
+                <p>将文件拖拽到此处，或 <a href="#" onclick="getEl('fileInput').click(); return false;">点击选择</a></p>
+            </div>
+            <input type="file" id="fileInput">
+            <div id="fileInfoDisplay" class="hidden">
+                <p>已选: <strong id="selectedFileName"></strong></p>
+                <button onclick="generateShareLink()" style="margin-top:15px;">生成分享链接</button>
+            </div>
+        </div>
+        <div class="section hidden" id="shareStep2">
+            <h2>2. 分享链接并等待连接</h2>
+            <div class="share-link-wrapper">
+                <div id="shareLink"></div>
+                <button class="btn-small" onclick="copyLink()">复制</button>
+                <button class="btn-small btn-secondary" onclick="showQrCode()">二维码</button>
+            </div>
+            <h2 style="margin-top: 20px;">接收者列表</h2>
+            <div id="peerList">
+                <div class="peer-list-item" id="noPeers">
+                    <div class="peer-info" style="text-align: center; grid-column: 1 / -1;">暂无接收者连接...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Receive Page -->
+    <div id="receivePage" class="page">
+        <div class="section" id="receiveStep1">
+            <h2>1. 粘贴链接</h2>
+            <input type="text" id="shareUrlInput" placeholder="在此处粘贴分享链接">
+            <button id="connectButton" onclick="connectToPeer()">连接分享者</button>
+        </div>
+        <div class="section hidden" id="receiveStep2">
+            <h2>2. 接收文件</h2>
+            <div class="file-info-grid">
+              <span class="info-label">文件名:</span> <span id="fileName" class="info-value">-</span>
+              <span class="info-label">文件大小:</span> <span id="fileSize" class="info-value">-</span>
+            </div>
+            <div class="progress-bar"><div id="downloadProgress" class="progress-fill"></div></div>
+            <div class="file-info-grid" style="font-size: 14px;">
+              <span class="info-label">进度:</span> <span id="progressText" class="info-value">0%</span>
+              <span class="info-label">速度:</span> <span id="speedText" class="info-value">0 KB/s</span>
+            </div>
+            <div class="flex-row">
+                <button id="downloadButton" onclick="startDownload()" disabled>开始下载</button>
+                <button class="btn-secondary" onclick="cancelDownload()">取消</button>
+            </div>
+            <div id="downloadStatus" class="status"></div>
+        </div>
+    </div>
+    
+    <div class="status" id="globalStatus"><div class="spinner"></div>正在初始化网络...</div>
+  </div>
+
+  <script>
+    const getEl = id => document.getElementById(id);
+    let peer, file, activeConn, connectionTimeout;
+    let peerIdReady = false, isDownloading = false;
+    let receivedBytes = 0, totalBytes = 0, receivedChunks = [];
+    let downloadSpeedInterval;
+    const connections = new Map();
+    let retryCount = 0;
+
+    const PEERJS_SERVERS = [
+      { host: 'broker.webrtc.ecl.ntt.com', port: 443, path: '/', secure: true },
+      { host: '0.peerjs.com', port: 443, path: '/', secure: true },
+      { host: 'peerjs.socketsupply.co', port: 443, path: '/', secure: true }
+    ];
+    let currentServerIndex = 0;
+    
+    const ICE_SERVERS = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+    };
+
+    window.onload = () => {
+        setupDragDrop();
+        getEl('qrModal').addEventListener('click', () => getEl('qrModal').classList.remove('show'));
+        setupModeFromURL();
+        initPeer();
+    };
+    
+    function setupModeFromURL() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('peerId')) {
+        switchMode('receive');
+        getEl('shareUrlInput').value = window.location.href;
+        const check = setInterval(() => {
+            if (peerIdReady) { clearInterval(check); connectToPeer(); }
+        }, 500);
+      } else {
+        switchMode('share');
+      }
+    }
+
+    function initPeer() {
+      if (peer) peer.destroy();
+      const server = PEERJS_SERVERS[currentServerIndex];
+      updateStatus(`正在连接信令服务器... (${currentServerIndex + 1}/${PEERJS_SERVERS.length})`);
+      try {
+        peer = new Peer({ ...server, debug: 2, config: ICE_SERVERS });
+        peer.on('open', id => {
+            peerIdReady = true;
+            retryCount = 0;
+            updateStatus('网络已就绪', false);
+        });
+        peer.on('connection', handleNewConnection);
+        peer.on('error', handlePeerError);
+      } catch (error) {
+          handlePeerError(error);
+      }
+    }
+
+    function handlePeerError(err) {
+      console.error('PeerJS Error:', err);
+      const maxRetries = 3;
+      if (retryCount < maxRetries) {
+        retryCount++;
+        updateStatus(`连接问题，正在重试 (${retryCount}/${maxRetries})...`);
+        setTimeout(initPeer, 2000);
+      } else if (currentServerIndex < PEERJS_SERVERS.length - 1) {
+        retryCount = 0;
+        currentServerIndex++;
+        initPeer();
+      } else {
+        const errorMap = {
+            'browser-incompatible': '浏览器不兼容 WebRTC。', 'disconnected': '与服务器断开连接。',
+            'peer-unavailable': '对方设备已离线或链接无效。', 'network': '网络错误，无法连接到服务器。',
+            'webrtc': '无法建立点对点连接，可能受网络限制。', 'server-error': '服务器错误，请稍后重试。'
+        };
+        const message = errorMap[err.type] || `发生未知错误: ${err.type}`;
+        updateStatus(message, false);
+      }
+    }
+    
+    function switchMode(mode) {
+        const shareBtn = getEl('shareModeBtn');
+        const receiveBtn = getEl('receiveModeBtn');
+        getEl('sharePage').classList.toggle('active', mode === 'share');
+        getEl('receivePage').classList.toggle('active', mode === 'receive');
+        shareBtn.classList.toggle('active', mode === 'share');
+        receiveBtn.classList.toggle('active', mode === 'receive');
+        updateStatus('准备就绪', false);
+    }
+
+    function updateStatus(text, showSpinner = true) {
+        getEl('globalStatus').innerHTML = `${showSpinner ? '<div class="spinner"></div>' : ''}<span>${text}</span>`;
+    }
+
+    function showNotification(type, message) {
+        const area = getEl('notificationArea');
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        area.appendChild(notification);
+        setTimeout(() => notification.classList.add('show'), 10);
+        setTimeout(() => {
+            notification.classList.remove('show');
+            notification.addEventListener('transitionend', () => notification.remove());
+        }, 4000);
+    }
+
+    // --- Share Mode Logic ---
+    function setupDragDrop() {
+        const zone = getEl('fileDropZone');
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+        zone.addEventListener('drop', e => {
+            e.preventDefault(); zone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) handleFileSelect(e.dataTransfer.files[0]);
+        });
+        getEl('fileInput').addEventListener('change', e => handleFileSelect(e.target.files[0]));
+    }
+
+    function handleFileSelect(selectedFile) {
+        if (!selectedFile) return;
+        file = selectedFile;
+        getEl('fileInfoDisplay').classList.remove('hidden');
+        getEl('selectedFileName').textContent = file.name;
+    }
+
+    function generateShareLink() {
+        if (!peerIdReady) return showNotification('error', '网络未就绪，请稍等');
+        const shareLink = `${window.location.origin}${window.location.pathname}?peerId=${peer.id}`;
+        getEl('shareLink').innerHTML = `<a href="${shareLink}" target="_blank">${shareLink}</a>`;
+        getEl('shareStep2').classList.remove('hidden');
+        getEl('shareStep1').style.opacity = "0.5";
+        updateStatus('已生成链接，等待接收者连接...', true);
+    }
+    
+    function copyLink() {
+        navigator.clipboard.writeText(getEl('shareLink').querySelector('a').href)
+            .then(() => showNotification('success', '链接已复制!'))
+            .catch(() => showNotification('error', '复制失败'));
+    }
+
+    function showQrCode() {
+        const link = getEl('shareLink').querySelector('a').href;
+        const qrContainer = getEl('qrcode');
+        qrContainer.innerHTML = '';
+        new QRCode(qrContainer, { text: link, width: 256, height: 256 });
+        getEl('qrModal').classList.add('show');
+    }
+
+    function handleNewConnection(conn) {
+        getEl('noPeers')?.remove();
+        const peerId = conn.peer;
+        const peerElement = document.createElement('div');
+        peerElement.className = 'peer-list-item';
+        peerElement.id = `peer-${peerId}`;
+        peerElement.innerHTML = `
+            <div class="peer-info">
+                <div class="peer-id">访客 ${peerId.slice(0, 6)}</div>
+                <div class="peer-status-text">已连接</div>
+                <div class="peer-progress"><div class="peer-progress-fill"></div></div>
+            </div>
+            <div class="status-badge status-connected">已连接</div>`;
+        getEl('peerList').appendChild(peerElement);
+
+        const connectionState = { conn, element: peerElement, status: 'connected' };
+        connections.set(peerId, connectionState);
+        
+        conn.on('data', data => { if (data.type === 'request-file') sendFile(conn); });
+        conn.on('close', () => {
+            connections.delete(peerId);
+            peerElement.remove();
+            if (connections.size === 0) {
+                 getEl('peerList').innerHTML = `<div class="peer-list-item" id="noPeers"><div class="peer-info" style="text-align: center; grid-column: 1 / -1;">暂无接收者连接...</div></div>`;
+            }
+        });
+        conn.on('error', err => handlePeerError(err));
+    }
+    
+    function sendFile(conn) {
+        if (!file) { return conn.send({type: 'error', payload: '分享者未选择文件'}); }
+
+        const peerId = conn.peer;
+        const state = connections.get(peerId);
+        if (!state) return;
+
+        const CHUNK_SIZE = 256 * 1024;
+        const reader = new FileReader();
+        let offset = 0, lastUpdate = Date.now(), lastLoaded = 0;
+
+        updatePeerUI(peerId, { statusText: '0%', badgeText: '传输中', badgeClass: 'status-sending' });
+        
+        conn.send({ type: 'file-info', payload: { name: file.name, size: file.size }});
+        
+        reader.onload = e => {
+            try {
+                if (!conn.open) return;
+                conn.send({ type: 'file-chunk', payload: e.target.result });
+                offset += e.target.result.byteLength;
+                
+                const now = Date.now();
+                if (now - lastUpdate > 500) {
+                    const progress = (offset / file.size) * 100;
+                    const speed = (offset - lastLoaded) / (now - lastUpdate) * 1000 / 1024;
+                    updatePeerUI(peerId, { progress, statusText: `${progress.toFixed(1)}% (${speed.toFixed(1)} KB/s)` });
+                    lastUpdate = now;
+                    lastLoaded = offset;
+                }
+                
+                if (offset < file.size) {
+                    if (conn.bufferedAmount > CHUNK_SIZE * 2) setTimeout(sendNextChunk, 100);
+                    else sendNextChunk();
+                } else {
+                    conn.send({ type: 'file-complete' });
+                    updatePeerUI(peerId, { progress: 100, statusText: '完成', badgeText: '已完成', badgeClass: 'status-completed' });
+                }
+            } catch (err) { updatePeerUI(peerId, { statusText: '错误', badgeText: '错误', badgeClass: 'status-error' }); }
+        };
+        const sendNextChunk = () => reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK_SIZE));
+        sendNextChunk();
+    }
+
+    function updatePeerUI(peerId, { progress, statusText, badgeText, badgeClass }) {
+        const state = connections.get(peerId);
+        if (!state) return;
+        if (progress !== undefined) state.element.querySelector('.peer-progress-fill').style.width = `${progress}%`;
+        if (statusText) state.element.querySelector('.peer-status-text').textContent = statusText;
+        if (badgeText) {
+            const badge = state.element.querySelector('.status-badge');
+            badge.textContent = badgeText;
+            badge.className = `status-badge ${badgeClass}`;
+        }
+    }
+    
+    // --- Receive Mode Logic ---
+    function connectToPeer() {
+        const url = getEl('shareUrlInput').value;
+        const match = url.match(/peerId=([a-zA-Z0-9-]+)/);
+        if (!match) return showNotification('error', '链接格式无效');
+
+        updateStatus('正在连接分享者...', true);
+        if (activeConn) activeConn.close();
+        activeConn = peer.connect(match[1], { reliable: true });
+
+        connectionTimeout = setTimeout(() => {
+            handlePeerError({type: 'peer-unavailable'});
+            if(activeConn) activeConn.close();
+        }, 15000);
+
+        activeConn.on('open', () => {
+            clearTimeout(connectionTimeout);
+            updateStatus('连接成功，等待文件信息...', false);
+            getEl('receiveStep2').classList.remove('hidden');
+            getEl('receiveStep1').classList.add('hidden');
+            activeConn.on('data', handleFileData);
+            activeConn.send({ type: 'request-file' });
+        });
+        activeConn.on('close', () => { clearTimeout(connectionTimeout); updateStatus('与分享者的连接已断开', false); getEl('downloadButton').disabled = true; });
+        activeConn.on('error', err => { clearTimeout(connectionTimeout); handlePeerError(err); });
+    }
+    
+    function handleFileData(data) {
+        if (data.type === 'file-info') {
+            totalBytes = data.payload.size;
+            getEl('fileName').textContent = data.payload.name;
+            getEl('fileSize').textContent = (totalBytes / 1024 / 1024).toFixed(2) + ' MB';
+            getEl('downloadButton').disabled = false;
+            getEl('downloadStatus').textContent = '文件信息已就绪';
+        } else if (data.type === 'file-chunk') {
+            if (!isDownloading) return;
+            receivedBytes += data.payload.byteLength;
+            receivedChunks.push(data.payload);
+            const progress = totalBytes > 0 ? (receivedBytes / totalBytes) * 100 : 0;
+            getEl('downloadProgress').style.width = `${progress}%`;
+            getEl('progressText').textContent = `${progress.toFixed(1)}%`;
+        } else if (data.type === 'file-complete') {
+            if (!isDownloading) return;
+            isDownloading = false;
+            clearInterval(downloadSpeedInterval);
+            
+            const blob = new Blob(receivedChunks);
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = getEl('fileName').textContent;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            
+            getEl('downloadStatus').textContent = '文件下载完成!';
+            const btn = getEl('downloadButton');
+            btn.textContent = '下载完成';
+            btn.disabled = true;
+            getEl('speedText').textContent = "0 KB/s";
+        } else if (data.type === 'error') {
+            showNotification('error', data.payload);
+        }
+    }
+    
+    function startDownload() {
+        isDownloading = true;
+        let lastLoaded = 0;
+        let lastUpdate = Date.now();
+        getEl('downloadButton').disabled = true;
+        getEl('downloadStatus').textContent = '';
+        
+        downloadSpeedInterval = setInterval(() => {
+            if (!isDownloading) return clearInterval(downloadSpeedInterval);
+            const now = Date.now();
+            const speed = (receivedBytes - lastLoaded) / (now - lastUpdate) * 1000 / 1024;
+            getEl('speedText').textContent = `${speed.toFixed(1)} KB/s`;
+            lastLoaded = receivedBytes;
+            lastUpdate = now;
+        }, 1000);
+    }
+
+    function cancelDownload() {
+        if (activeConn) activeConn.close();
+        isDownloading = false;
+        clearInterval(downloadSpeedInterval);
+        getEl('receiveStep1').classList.remove('hidden');
+        getEl('receiveStep2').classList.add('hidden');
+        // Reset state
+        receivedBytes = 0; totalBytes = 0; receivedChunks = [];
+        getEl('downloadProgress').style.width = '0%';
+        getEl('progressText').textContent = `0%`;
+        getEl('speedText').textContent = `0 KB/s`;
+        showNotification('success', '操作已取消');
+    }
+  </script>
+</body>
+</html>
