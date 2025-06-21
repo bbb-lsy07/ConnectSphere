@@ -1,5 +1,4 @@
-# ConnectSphere - 点对点文件传输 Web 应用 / Peer-to-Peer File Transfer Web App
-
+# ConnectSphere - 点对点文件传输 Web 应用 
 **ConnectSphere（灵犀传）** 是一款简洁、直观的基于 **PeerJS** 和 **WebRTC** 技术的点对点（P2P）文件传输 Web 应用。它允许用户在设备间直接传输文件，无需依赖中央服务器，确保快速且安全的传输。应用采用现代暗色主题界面，支持二维码分享和实时进度跟踪，让文件分享变得简单高效。
 
 **ConnectSphere** is a sleek and intuitive web application for peer-to-peer (P2P) file transfer, built with **PeerJS** and **WebRTC**. It enables users to share files directly between devices without a central server, ensuring fast and secure transfers. With a modern dark-themed interface, QR code support, and real-time progress tracking, ConnectSphere makes file sharing simple and efficient.
