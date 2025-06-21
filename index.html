@@ -11,7 +11,7 @@
       --primary-color: #10b981; --secondary-color: #3b82f6; --background-dark: #0f1f2f;
       --background-light: #1a2b40; --card-bg: rgba(30, 38, 46, 0.9); --text-main: #e0e0e0;
       --text-muted: #9ca3af; --border-color: rgba(16, 185, 129, 0.2); --error-color: #ef4444;
-      --completed-color: #8b5cf6;
+      --completed-color: #8b5cf6; --warning-color: #f59e0b; --paused-color: #6b7280;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
     body {
@@ -55,6 +55,8 @@
     button:hover:not(:disabled) { filter: brightness(1.1); }
     button:disabled { background: #4b5563; cursor: not-allowed; }
     .btn-secondary { background: var(--secondary-color); }
+    .btn-warning { background: var(--warning-color); }
+    .btn-paused { background: var(--paused-color); }
     .btn-small { padding: 6px 12px; font-size: 14px; width: auto; margin-left: 10px; }
     .flex-row { display: flex; gap: 10px; }
 
@@ -85,6 +87,8 @@
     .status-sending { background-color: var(--primary-color); }
     .status-completed { background-color: var(--completed-color); }
     .status-error { background-color: var(--error-color); }
+    .status-waiting { background-color: var(--warning-color); }
+    .status-paused { background-color: var(--paused-color); }
     .peer-progress { width: 100%; height: 5px; background: var(--background-light); border-radius: 3px; margin-top: 5px; }
     .peer-progress-fill { height: 100%; background: var(--primary-color); border-radius: 3px; transition: width 0.3s; }
 
@@ -105,12 +109,82 @@
     .notification.show { opacity: 1; transform: translateY(0); }
     .notification-success { background: var(--primary-color); }
     .notification-error { background: var(--error-color); }
+    .notification-warning { background: var(--warning-color); }
 
     .modal-overlay { background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
     .modal-overlay.show { opacity: 1; pointer-events: auto; }
     .modal-content { background: var(--card-bg); padding: 30px; border-radius: 16px; text-align: center; }
     #qrcode { margin: 15px 0; padding: 10px; background: white; border-radius: 8px; }
     .hidden { display: none !important; }
+    
+    .retry-section { margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color); }
+    
+    /* 状态指示器 */
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    .status-connecting { background-color: var(--warning-color); }
+    .status-connected { background-color: var(--primary-color); }
+    .status-disconnected { background-color: var(--error-color); }
+    
+    /* 文件完整性验证 */
+    .file-hash-section { 
+      margin-top: 15px; 
+      padding: 10px; 
+      background: rgba(255,255,255,0.05); 
+      border-radius: 8px; 
+      font-size: 13px;
+      display: none;
+    }
+    .file-hash-section.visible { 
+      display: block;
+    }
+    .file-hash-section span {
+      font-family: monospace;
+      word-break: break-all;
+    }
+    
+    /* 超时提示 */
+    .timeout-warning {
+      background: rgba(239, 68, 68, 0.1);
+      border-left: 4px solid var(--error-color);
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    
+    .tooltip {
+      position: relative;
+      display: inline-block;
+      cursor: help;
+    }
+    .tooltip .tooltip-text {
+      visibility: hidden;
+      width: 200px;
+      background-color: var(--background-light);
+      color: var(--text-main);
+      text-align: center;
+      border-radius: 6px;
+      padding: 5px;
+      position: absolute;
+      z-index: 1;
+      bottom: 125%;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.3s;
+      font-size: 12px;
+      border: 1px solid var(--border-color);
+    }
+    .tooltip:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -155,6 +229,10 @@
                     <div class="peer-info" style="text-align: center; grid-column: 1 / -1;">暂无接收者连接...</div>
                 </div>
             </div>
+            
+            <div class="retry-section">
+                <button class="btn-warning" onclick="resetShareProcess()">重新选择文件</button>
+            </div>
         </div>
     </div>
 
@@ -166,7 +244,7 @@
             <button id="connectButton" onclick="connectToPeer()">连接分享者</button>
         </div>
         <div class="section hidden" id="receiveStep2">
-            <h2>2. 接收文件</h2>
+            <h2>2. 接收文件 <span id="connectionStatus" class="status-indicator status-connecting"></span></h2>
             <div class="file-info-grid">
               <span class="info-label">文件名:</span> <span id="fileName" class="info-value">-</span>
               <span class="info-label">文件大小:</span> <span id="fileSize" class="info-value">-</span>
@@ -178,9 +256,30 @@
             </div>
             <div class="flex-row">
                 <button id="downloadButton" onclick="startDownload()" disabled>开始下载</button>
-                <button class="btn-secondary" onclick="cancelDownload()">取消</button>
+                <button class="btn-secondary" id="pauseButton" onclick="pauseDownload()" disabled>暂停</button>
             </div>
             <div id="downloadStatus" class="status"></div>
+            
+            <div class="file-hash-section" id="hashSection">
+              <div class="info-label">
+                文件校验:
+                <span class="tooltip">?
+                  <span class="tooltip-text">用于验证文件完整性的SHA-256哈希值，下载完成后会自动验证</span>
+                </span>
+              </div>
+              <div><span id="fileHash"></span></div>
+            </div>
+            
+            <div id="timeoutWarning" class="timeout-warning hidden">
+              传输已暂停，长时间无进度。请尝试<span class="tooltip">恢复下载
+                <span class="tooltip-text">如果恢复失败，请尝试重新连接</span>
+              </span>
+            </div>
+            
+            <div class="retry-section">
+                <button class="btn-warning" id="resumeButton" onclick="resumeDownload()" disabled>恢复下载</button>
+                <button class="btn-secondary" onclick="resetReceiveProcess()">重新连接</button>
+            </div>
         </div>
     </div>
     
@@ -190,11 +289,19 @@
   <script>
     const getEl = id => document.getElementById(id);
     let peer, file, activeConn, connectionTimeout;
-    let peerIdReady = false, isDownloading = false;
+    let peerIdReady = false, isDownloading = false, isSending = false;
     let receivedBytes = 0, totalBytes = 0, receivedChunks = [];
-    let downloadSpeedInterval;
+    let downloadSpeedInterval, fileCompleted = false;
     const connections = new Map();
     let retryCount = 0;
+    let chunkQueue = [];
+    let chunkQueueProcessing = false;
+    let lastChunkSentTime = 0;
+    let fileHash = '';
+    let paused = false;
+    let resumeOffset = 0;
+    let lastDataReceivedTime = 0;
+    let inactivityTimer;
 
     const PEERJS_SERVERS = [
       { host: 'broker.webrtc.ecl.ntt.com', port: 443, path: '/', secure: true },
@@ -209,6 +316,14 @@
             { urls: 'stun:stun1.l.google.com:19302' }
         ]
     };
+
+    // 简单的哈希函数用于文件验证
+    async function simpleHash(data) {
+      const buffer = await data.arrayBuffer();
+      const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
 
     window.onload = () => {
         setupDragDrop();
@@ -309,11 +424,19 @@
         getEl('fileInput').addEventListener('change', e => handleFileSelect(e.target.files[0]));
     }
 
-    function handleFileSelect(selectedFile) {
+    async function handleFileSelect(selectedFile) {
         if (!selectedFile) return;
         file = selectedFile;
         getEl('fileInfoDisplay').classList.remove('hidden');
         getEl('selectedFileName').textContent = file.name;
+        
+        // 计算文件哈希值用于完整性验证
+        try {
+          fileHash = await simpleHash(file);
+        } catch (error) {
+          console.error('计算文件哈希失败:', error);
+          fileHash = '';
+        }
     }
 
     function generateShareLink() {
@@ -348,16 +471,29 @@
         peerElement.innerHTML = `
             <div class="peer-info">
                 <div class="peer-id">访客 ${peerId.slice(0, 6)}</div>
-                <div class="peer-status-text">已连接</div>
+                <div class="peer-status-text">等待请求文件</div>
                 <div class="peer-progress"><div class="peer-progress-fill"></div></div>
             </div>
-            <div class="status-badge status-connected">已连接</div>`;
+            <div class="status-badge status-waiting">等待中</div>`;
         getEl('peerList').appendChild(peerElement);
 
         const connectionState = { conn, element: peerElement, status: 'connected' };
         connections.set(peerId, connectionState);
         
-        conn.on('data', data => { if (data.type === 'request-file') sendFile(conn); });
+        conn.on('data', data => { 
+          if (data.type === 'request-file') {
+            updatePeerUI(peerId, { badgeText: '传输中', badgeClass: 'status-sending', statusText: '0%' });
+            sendFile(conn); 
+          } else if (data.type === 'resume-download') {
+            // 处理恢复下载请求
+            resumeOffset = data.payload.offset;
+            updatePeerUI(peerId, { badgeText: '恢复传输', badgeClass: 'status-sending', statusText: '恢复中...' });
+            sendFile(conn, resumeOffset);
+          } else if (data.type === 'pause-download') {
+            paused = true;
+            updatePeerUI(peerId, { badgeText: '已暂停', badgeClass: 'status-paused', statusText: '传输已暂停' });
+          }
+        });
         conn.on('close', () => {
             connections.delete(peerId);
             peerElement.remove();
@@ -368,8 +504,12 @@
         conn.on('error', err => handlePeerError(err));
     }
     
-    function sendFile(conn) {
-        if (!file) { return conn.send({type: 'error', payload: '分享者未选择文件'}); }
+    function sendFile(conn, startOffset = 0) {
+        if (!file) { 
+          conn.send({type: 'error', payload: '分享者未选择文件'});
+          updatePeerUI(conn.peer, { statusText: '错误', badgeText: '错误', badgeClass: 'status-error' });
+          return;
+        }
 
         const peerId = conn.peer;
         const state = connections.get(peerId);
@@ -377,17 +517,32 @@
 
         const CHUNK_SIZE = 256 * 1024;
         const reader = new FileReader();
-        let offset = 0, lastUpdate = Date.now(), lastLoaded = 0;
-
-        updatePeerUI(peerId, { statusText: '0%', badgeText: '传输中', badgeClass: 'status-sending' });
+        let offset = startOffset, lastUpdate = Date.now(), lastLoaded = offset;
+        isSending = true;
+        paused = false;
         
-        conn.send({ type: 'file-info', payload: { name: file.name, size: file.size }});
+        // 发送文件信息和哈希值
+        conn.send({ type: 'file-info', payload: { 
+          name: file.name, 
+          size: file.size,
+          hash: fileHash
+        }});
         
         reader.onload = e => {
             try {
-                if (!conn.open) return;
-                conn.send({ type: 'file-chunk', payload: e.target.result });
-                offset += e.target.result.byteLength;
+                if (!conn.open || paused) return;
+                const chunk = e.target.result;
+                
+                // 将数据块加入队列
+                chunkQueue.push({ conn, chunk, offset });
+                
+                // 如果队列处理未启动，则启动
+                if (!chunkQueueProcessing) {
+                  processChunkQueue();
+                }
+                
+                offset += chunk.byteLength;
+                lastChunkSentTime = Date.now();
                 
                 const now = Date.now();
                 if (now - lastUpdate > 500) {
@@ -399,16 +554,45 @@
                 }
                 
                 if (offset < file.size) {
-                    if (conn.bufferedAmount > CHUNK_SIZE * 2) setTimeout(sendNextChunk, 100);
-                    else sendNextChunk();
+                  reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK_SIZE));
                 } else {
-                    conn.send({ type: 'file-complete' });
-                    updatePeerUI(peerId, { progress: 100, statusText: '完成', badgeText: '已完成', badgeClass: 'status-completed' });
+                  // 等待所有数据块发送完毕再发送完成消息
+                  const checkCompletion = setInterval(() => {
+                    if (chunkQueue.length === 0) {
+                      clearInterval(checkCompletion);
+                      conn.send({ type: 'file-complete', payload: { hash: fileHash } });
+                      updatePeerUI(peerId, { progress: 100, statusText: '完成', badgeText: '已完成', badgeClass: 'status-completed' });
+                    }
+                  }, 100);
                 }
-            } catch (err) { updatePeerUI(peerId, { statusText: '错误', badgeText: '错误', badgeClass: 'status-error' }); }
+            } catch (err) { 
+              console.error('发送文件错误:', err);
+              updatePeerUI(peerId, { statusText: '错误', badgeText: '错误', badgeClass: 'status-error' }); 
+            }
         };
-        const sendNextChunk = () => reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK_SIZE));
-        sendNextChunk();
+        reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK_SIZE));
+    }
+    
+    function processChunkQueue() {
+      if (chunkQueue.length === 0) {
+        chunkQueueProcessing = false;
+        return;
+      }
+      
+      chunkQueueProcessing = true;
+      const item = chunkQueue.shift();
+      
+      // 发送数据块
+      try {
+        if (item.conn.open) {
+          item.conn.send({ type: 'file-chunk', payload: item.chunk, offset: item.offset });
+        }
+      } catch (err) {
+        console.error('发送数据块错误:', err);
+      }
+      
+      // 控制发送速度，避免阻塞
+      setTimeout(processChunkQueue, 0);
     }
 
     function updatePeerUI(peerId, { progress, statusText, badgeText, badgeClass }) {
@@ -443,58 +627,201 @@
             updateStatus('连接成功，等待文件信息...', false);
             getEl('receiveStep2').classList.remove('hidden');
             getEl('receiveStep1').classList.add('hidden');
-            activeConn.on('data', handleFileData);
+            getEl('hashSection').classList.add('hidden');
+            getEl('timeoutWarning').classList.add('hidden');
+            getEl('pauseButton').disabled = false;
+            getEl('resumeButton').disabled = true;
+            
+            // 连接成功后立即发送文件请求
             activeConn.send({ type: 'request-file' });
+            getEl('downloadStatus').textContent = '已发送文件请求...';
+            getEl('connectionStatus').className = 'status-indicator status-connected';
+            
+            activeConn.on('data', handleFileData);
         });
-        activeConn.on('close', () => { clearTimeout(connectionTimeout); updateStatus('与分享者的连接已断开', false); getEl('downloadButton').disabled = true; });
-        activeConn.on('error', err => { clearTimeout(connectionTimeout); handlePeerError(err); });
+        activeConn.on('close', () => { 
+            clearTimeout(connectionTimeout); 
+            updateStatus('与分享者的连接已断开', false); 
+            getEl('downloadButton').disabled = true; 
+            getEl('connectionStatus').className = 'status-indicator status-disconnected';
+            if (isDownloading && !fileCompleted) {
+              showNotification('warning', '连接中断，点击"恢复下载"继续');
+              getEl('resumeButton').disabled = false;
+            }
+        });
+        activeConn.on('error', err => { 
+            clearTimeout(connectionTimeout); 
+            handlePeerError(err); 
+            getEl('connectionStatus').className = 'status-indicator status-disconnected';
+        });
     }
     
-    function handleFileData(data) {
-        if (data.type === 'file-info') {
-            totalBytes = data.payload.size;
-            getEl('fileName').textContent = data.payload.name;
-            getEl('fileSize').textContent = (totalBytes / 1024 / 1024).toFixed(2) + ' MB';
-            getEl('downloadButton').disabled = false;
-            getEl('downloadStatus').textContent = '文件信息已就绪';
-        } else if (data.type === 'file-chunk') {
-            if (!isDownloading) return;
-            receivedBytes += data.payload.byteLength;
-            receivedChunks.push(data.payload);
-            const progress = totalBytes > 0 ? (receivedBytes / totalBytes) * 100 : 0;
-            getEl('downloadProgress').style.width = `${progress}%`;
-            getEl('progressText').textContent = `${progress.toFixed(1)}%`;
-        } else if (data.type === 'file-complete') {
-            if (!isDownloading) return;
-            isDownloading = false;
-            clearInterval(downloadSpeedInterval);
-            
-            const blob = new Blob(receivedChunks);
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = getEl('fileName').textContent;
-            a.click();
-            URL.revokeObjectURL(a.href);
-            
-            getEl('downloadStatus').textContent = '文件下载完成!';
-            const btn = getEl('downloadButton');
-            btn.textContent = '下载完成';
-            btn.disabled = true;
-            getEl('speedText').textContent = "0 KB/s";
-        } else if (data.type === 'error') {
-            showNotification('error', data.payload);
+    async function handleFileData(data) {
+        try {
+          if (data.type === 'file-info') {
+              totalBytes = data.payload.size;
+              fileCompleted = false;
+              receivedBytes = 0;
+              receivedChunks = [];
+              getEl('fileName').textContent = data.payload.name;
+              getEl('fileSize').textContent = (totalBytes / 1024 / 1024).toFixed(2) + ' MB';
+              getEl('downloadButton').disabled = false;
+              getEl('downloadStatus').textContent = '文件信息已就绪，点击开始下载';
+              
+              // 显示文件哈希值用于验证
+              if (data.payload.hash) {
+                getEl('hashSection').classList.add('visible');
+                getEl('fileHash').textContent = data.payload.hash;
+              }
+              
+              // 重置进度
+              getEl('downloadProgress').style.width = '0%';
+              getEl('progressText').textContent = '0%';
+              getEl('speedText').textContent = '0 KB/s';
+          } else if (data.type === 'file-chunk') {
+              if (!isDownloading || paused) return;
+              
+              // 记录最后接收数据的时间
+              lastDataReceivedTime = Date.now();
+              
+              // 确保数据块按顺序处理
+              if (data.offset === receivedBytes) {
+                receivedBytes += data.payload.byteLength;
+                receivedChunks.push(data.payload);
+                const progress = totalBytes > 0 ? (receivedBytes / totalBytes) * 100 : 0;
+                getEl('downloadProgress').style.width = `${progress}%`;
+                getEl('progressText').textContent = `${progress.toFixed(1)}%`;
+                
+                // 重置超时检测
+                resetInactivityTimer();
+              } else {
+                // 处理乱序数据包（理论上不会发生，因为使用可靠连接）
+                console.warn('乱序数据包，期望:', receivedBytes, '实际:', data.offset);
+              }
+              
+              // 检查是否已收到全部数据
+              if (totalBytes > 0 && receivedBytes >= totalBytes && !fileCompleted) {
+                  // 等待500ms确保所有数据包到达
+                  setTimeout(verifyFileIntegrity, 500);
+              }
+          } else if (data.type === 'file-complete') {
+              if (!isDownloading) return;
+              
+              // 检查是否已收到全部数据
+              if (totalBytes > 0 && receivedBytes >= totalBytes && !fileCompleted) {
+                  verifyFileIntegrity();
+              } else {
+                  // 如果数据未收全，启动等待机制
+                  getEl('downloadStatus').textContent = '正在等待最后的数据...';
+                  let waitCount = 0;
+                  const maxWait = 300; // 30秒（100ms * 300）
+                  const waitInterval = setInterval(() => {
+                      if (receivedBytes >= totalBytes && !fileCompleted) {
+                          clearInterval(waitInterval);
+                          verifyFileIntegrity();
+                      } else if (waitCount >= maxWait) {
+                          clearInterval(waitInterval);
+                          showNotification('error', '文件接收超时，请尝试恢复下载');
+                          getEl('downloadStatus').textContent = '接收超时';
+                          pauseDownload();
+                      }
+                      waitCount++;
+                  }, 100);
+              }
+          } else if (data.type === 'error') {
+              showNotification('error', data.payload);
+              getEl('downloadStatus').textContent = data.payload;
+          }
+        } catch (err) {
+          console.error('处理文件数据错误:', err);
+          showNotification('error', '数据处理错误');
         }
     }
     
+    // 超时检测机制
+    function resetInactivityTimer() {
+      clearTimeout(inactivityTimer);
+      getEl('timeoutWarning').classList.add('hidden');
+      
+      // 设置15秒超时检测
+      inactivityTimer = setTimeout(() => {
+        if (isDownloading && !paused && !fileCompleted) {
+          showNotification('warning', '传输无进展，已自动暂停');
+          getEl('downloadStatus').textContent = '传输无进展，已自动暂停';
+          getEl('timeoutWarning').classList.remove('hidden');
+          pauseDownload();
+        }
+      }, 15000);
+    }
+    
+    // 验证文件完整性
+    async function verifyFileIntegrity() {
+      try {
+        const blob = new Blob(receivedChunks);
+        
+        // 验证文件大小
+        if (blob.size !== totalBytes) {
+          showNotification('error', `文件大小不匹配: ${blob.size} / ${totalBytes}`);
+          getEl('downloadStatus').textContent = '文件大小不匹配，请重试';
+          pauseDownload();
+          return;
+        }
+        
+        // 验证文件哈希值
+        const expectedHash = getEl('fileHash').textContent;
+        if (expectedHash) {
+          getEl('downloadStatus').textContent = '正在验证文件完整性...';
+          const receivedHash = await simpleHash(blob);
+          
+          if (receivedHash !== expectedHash) {
+            showNotification('error', '文件校验失败，内容可能已损坏');
+            getEl('downloadStatus').textContent = '文件校验失败';
+            pauseDownload();
+            return;
+          }
+        }
+        
+        // 验证通过，下载文件
+        assembleAndDownloadFile(blob);
+      } catch (err) {
+        console.error('文件验证错误:', err);
+        showNotification('error', '文件验证失败');
+        getEl('downloadStatus').textContent = '文件验证失败';
+      }
+    }
+    
     function startDownload() {
+        if (!activeConn || activeConn.open !== true) {
+            showNotification('error', '连接已断开，请重新连接');
+            return;
+        }
+        
+        // 重置状态
+        fileCompleted = false;
+        receivedBytes = 0;
+        receivedChunks = [];
+        getEl('downloadProgress').style.width = '0%';
+        getEl('progressText').textContent = '0%';
+        getEl('speedText').textContent = '0 KB/s';
+        getEl('downloadStatus').textContent = '开始下载...';
+        paused = false;
+        getEl('pauseButton').disabled = false;
+        getEl('resumeButton').disabled = true;
+
         isDownloading = true;
         let lastLoaded = 0;
         let lastUpdate = Date.now();
         getEl('downloadButton').disabled = true;
-        getEl('downloadStatus').textContent = '';
+        
+        // 启动超时检测
+        lastDataReceivedTime = Date.now();
+        resetInactivityTimer();
         
         downloadSpeedInterval = setInterval(() => {
-            if (!isDownloading) return clearInterval(downloadSpeedInterval);
+            if (!isDownloading) {
+                clearInterval(downloadSpeedInterval);
+                return;
+            }
             const now = Date.now();
             const speed = (receivedBytes - lastLoaded) / (now - lastUpdate) * 1000 / 1024;
             getEl('speedText').textContent = `${speed.toFixed(1)} KB/s`;
@@ -502,11 +829,75 @@
             lastUpdate = now;
         }, 1000);
     }
+    
+    function pauseDownload() {
+      if (!isDownloading) return;
+      paused = true;
+      getEl('downloadStatus').textContent = '下载已暂停';
+      getEl('pauseButton').disabled = true;
+      getEl('resumeButton').disabled = false;
+      showNotification('warning', '下载已暂停');
+      
+      // 通知分享端暂停传输
+      if (activeConn && activeConn.open) {
+        activeConn.send({ type: 'pause-download' });
+      }
+    }
+    
+    function resumeDownload() {
+      if (!activeConn || activeConn.open !== true) {
+        showNotification('error', '连接已断开，请重新连接');
+        return;
+      }
+      
+      if (!paused) return;
+      
+      paused = false;
+      getEl('downloadStatus').textContent = '恢复下载...';
+      getEl('pauseButton').disabled = false;
+      getEl('resumeButton').disabled = true;
+      getEl('timeoutWarning').classList.add('hidden');
+      
+      // 重置超时检测
+      resetInactivityTimer();
+      
+      // 请求从当前接收位置继续下载
+      activeConn.send({ type: 'resume-download', payload: { offset: receivedBytes } });
+    }
+    
+    function assembleAndDownloadFile(blob) {
+        if (fileCompleted) return;
+        fileCompleted = true;
+        isDownloading = false;
+        clearInterval(downloadSpeedInterval);
+        clearTimeout(inactivityTimer);
+        
+        try {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = getEl('fileName').textContent;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(a.href), 100);
+            
+            getEl('downloadStatus').textContent = '文件下载完成!';
+            const btn = getEl('downloadButton');
+            btn.textContent = '下载完成';
+            btn.disabled = true;
+            getEl('speedText').textContent = "0 KB/s";
+            getEl('pauseButton').disabled = true;
+        } catch (err) {
+            console.error('组装文件错误:', err);
+            showNotification('error', '文件组装失败');
+            getEl('downloadStatus').textContent = '文件组装失败';
+        }
+    }
 
     function cancelDownload() {
         if (activeConn) activeConn.close();
         isDownloading = false;
+        fileCompleted = false;
         clearInterval(downloadSpeedInterval);
+        clearTimeout(inactivityTimer);
         getEl('receiveStep1').classList.remove('hidden');
         getEl('receiveStep2').classList.add('hidden');
         // Reset state
@@ -515,6 +906,25 @@
         getEl('progressText').textContent = `0%`;
         getEl('speedText').textContent = `0 KB/s`;
         showNotification('success', '操作已取消');
+    }
+    
+    function resetShareProcess() {
+        file = null;
+        getEl('fileInfoDisplay').classList.add('hidden');
+        getEl('shareStep2').classList.add('hidden');
+        getEl('shareStep1').style.opacity = "1";
+        connections.forEach((_, peerId) => {
+            const conn = connections.get(peerId)?.conn;
+            if (conn) conn.close();
+        });
+        connections.clear();
+        getEl('peerList').innerHTML = `<div class="peer-list-item" id="noPeers"><div class="peer-info" style="text-align: center; grid-column: 1 / -1;">暂无接收者连接...</div></div>`;
+        showNotification('success', '已重置分享流程');
+    }
+    
+    function resetReceiveProcess() {
+        cancelDownload();
+        showNotification('success', '已重置接收流程');
     }
   </script>
 </body>
